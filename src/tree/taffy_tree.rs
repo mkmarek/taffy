@@ -347,6 +347,11 @@ impl<NodeContext> Taffy<NodeContext> {
         self.node_context_data.get_mut(node.into())
     }
 
+    /// Get's a reference to the the context data associated with the node
+    pub fn get_node_context(&self, node: NodeId) -> Option<&NodeContext> {
+        self.node_context_data.get(node.into())
+    }
+
     /// Adds a `child` node under the supplied `parent`
     pub fn add_child(&mut self, parent: NodeId, child: NodeId) -> TaffyResult<()> {
         let parent_key = parent.into();
