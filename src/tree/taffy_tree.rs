@@ -464,6 +464,11 @@ impl<NodeContext> Taffy<NodeContext> {
         Ok(self.children[parent_key][child_index])
     }
 
+    /// Returns the parent node of the provided `node`
+    pub fn parent(&self, node: NodeId) -> TaffyResult<Option<NodeId>> {
+        self.parents.get(node.into()).copied().ok_or(TaffyError::InvalidInputNode(node))
+    }
+
     /// Returns the total number of nodes in the tree
     pub fn total_node_count(&self) -> usize {
         self.nodes.len()
