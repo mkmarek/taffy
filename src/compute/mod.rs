@@ -26,7 +26,7 @@ pub use self::grid::compute_grid_layout;
 use crate::geometry::{Line, Point, Size};
 use crate::style::AvailableSpace;
 use crate::tree::{
-    Layout, LayoutInput, LayoutOutput, LayoutTree, NodeId, PartialLayoutTree, PartialLayoutTreeExt, RunMode, SizingMode,
+    Layout, LayoutInput, LayoutOutput, LayoutTree, NodeId, PartialLayoutTree, PartialLayoutTreeExt, SizingMode,
 };
 use crate::util::debug::{debug_log, debug_log_node, debug_pop_node, debug_push_node};
 use crate::util::sys::round;
@@ -34,7 +34,7 @@ use crate::util::sys::round;
 /// Updates the stored layout of the provided `node` and its children
 pub fn compute_layout(tree: &mut impl PartialLayoutTree, root: NodeId, available_space: Size<AvailableSpace>) {
     // Recursively compute node layout
-    let size_and_baselines = tree.perform_child_layout(
+    let output = tree.perform_child_layout(
         root,
         Size::NONE,
         available_space.into_options(),
@@ -43,7 +43,7 @@ pub fn compute_layout(tree: &mut impl PartialLayoutTree, root: NodeId, available
         Line::FALSE,
     );
 
-    let layout = Layout { order: 0, size: size_and_baselines.size, location: Point::ZERO };
+    let layout = Layout { order: 0, size: output.size, content_size: output.content_size, location: Point::ZERO };
     *tree.get_unrounded_layout_mut(root) = layout;
 }
 
@@ -59,13 +59,10 @@ where
     ComputeFunction: FnMut(&mut Tree, NodeId, LayoutInput) -> LayoutOutput,
 {
     debug_push_node!(node);
-
     let LayoutInput { known_dimensions, available_space, run_mode, .. } = inputs;
-    let has_children = tree.child_count(node) > 0;
 
     // First we check if we have a cached result for the given input
-    let cache_run_mode = if !has_children { RunMode::PerformLayout } else { run_mode };
-    let cache_entry = tree.get_cache_mut(node).get(known_dimensions, available_space, cache_run_mode);
+    let cache_entry = tree.get_cache_mut(node).get(known_dimensions, available_space, run_mode);
     if let Some(cached_size_and_baselines) = cache_entry {
         debug_log!("CACHE", dbg:cached_size_and_baselines.size);
         debug_log_node!(known_dimensions, parent_size, available_space, run_mode, sizing_mode);
@@ -76,7 +73,7 @@ where
     let computed_size_and_baselines = compute_uncached(tree, node, inputs);
 
     // Cache result
-    tree.get_cache_mut(node).store(known_dimensions, available_space, cache_run_mode, computed_size_and_baselines);
+    tree.get_cache_mut(node).store(known_dimensions, available_space, run_mode, computed_size_and_baselines);
 
     debug_log!("RESULT", dbg:computed_size_and_baselines.size);
     debug_pop_node!();
@@ -109,6 +106,8 @@ pub fn round_layout(tree: &mut impl LayoutTree, node_id: NodeId) {
         layout.location.y = round(unrounded_layout.location.y);
         layout.size.width = round(cumulative_x + unrounded_layout.size.width) - round(cumulative_x);
         layout.size.height = round(cumulative_y + unrounded_layout.size.height) - round(cumulative_y);
+        layout.content_size.width = round(cumulative_x + unrounded_layout.content_size.width) - round(cumulative_x);
+        layout.content_size.height = round(cumulative_y + unrounded_layout.content_size.height) - round(cumulative_y);
 
         let child_count = tree.child_count(node_id);
         for index in 0..child_count {

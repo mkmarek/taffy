@@ -155,6 +155,8 @@ impl LayoutInput {
 pub struct LayoutOutput {
     /// The size of the node
     pub size: Size<f32>,
+    /// The size of the content within the node
+    pub content_size: Size<f32>,
     /// The first baseline of the node in each dimension, if any
     pub first_baselines: Point<Option<f32>>,
     /// Top margin that can be collapsed with. This is used for CSS block layout and can be set to
@@ -172,6 +174,7 @@ impl LayoutOutput {
     /// An all-zero `LayoutOutput` for hidden nodes
     pub const HIDDEN: Self = Self {
         size: Size::ZERO,
+        content_size: Size::ZERO,
         first_baselines: Point::NONE,
         top_margin: CollapsibleMarginSet::ZERO,
         bottom_margin: CollapsibleMarginSet::ZERO,
@@ -179,26 +182,29 @@ impl LayoutOutput {
     };
 
     /// Constructor to create a `LayoutOutput` from just the size and baselines
-    pub fn from_size_and_baselines(size: Size<f32>, first_baselines: Point<Option<f32>>) -> Self {
+    pub fn from_sizes_and_baselines(
+        size: Size<f32>,
+        content_size: Size<f32>,
+        first_baselines: Point<Option<f32>>,
+    ) -> Self {
         Self {
             size,
+            content_size,
             first_baselines,
             top_margin: CollapsibleMarginSet::ZERO,
             bottom_margin: CollapsibleMarginSet::ZERO,
             margins_can_collapse_through: false,
         }
     }
-}
 
-impl From<Size<f32>> for LayoutOutput {
-    fn from(size: Size<f32>) -> Self {
-        Self {
-            size,
-            first_baselines: Point::NONE,
-            top_margin: CollapsibleMarginSet::ZERO,
-            bottom_margin: CollapsibleMarginSet::ZERO,
-            margins_can_collapse_through: false,
-        }
+    /// Construct a SizeBaselinesAndMargins from just the container and content sizes
+    pub fn from_sizes(size: Size<f32>, content_size: Size<f32>) -> Self {
+        Self::from_sizes_and_baselines(size, content_size, Point::NONE)
+    }
+
+    /// Construct a SizeBaselinesAndMargins from just the container's size.
+    pub fn from_outer_size(size: Size<f32>) -> Self {
+        Self::from_sizes(size, Size::zero())
     }
 }
 
@@ -212,6 +218,9 @@ pub struct Layout {
     pub order: u32,
     /// The width and height of the node
     pub size: Size<f32>,
+    /// The width and height of the content inside the node. This may be larger than the size of the node in the case of
+    /// overflowing content and is useful for computing a "scroll width/height" for scrollable nodes
+    pub content_size: Size<f32>,
     /// The top-left corner of the node
     pub location: Point<f32>,
 }
@@ -224,7 +233,7 @@ impl Layout {
     /// This means it should be rendered below all other [`Layout`]s.
     #[must_use]
     pub const fn new() -> Self {
-        Self { order: 0, size: Size::zero(), location: Point::ZERO }
+        Self { order: 0, size: Size::zero(), content_size: Size::zero(), location: Point::ZERO }
     }
 
     /// Creates a new zero-[`Layout`] with the supplied `order` value.
@@ -233,6 +242,18 @@ impl Layout {
     /// The Zero-layout has size and location set to ZERO.
     #[must_use]
     pub const fn with_order(order: u32) -> Self {
-        Self { order, size: Size::zero(), location: Point::ZERO }
+        Self { order, size: Size::zero(), content_size: Size::zero(), location: Point::ZERO }
+    }
+
+    /// Return the scroll width of the node.
+    /// The scroll width is the difference between the width and the content width, floored at zero
+    pub fn scroll_width(&self) -> f32 {
+        f32_max(0.0, self.content_size.width - self.size.width)
+    }
+
+    /// Return the scroll width of the node.
+    /// The scroll width is the difference between the width and the content width, floored at zero
+    pub fn scroll_height(&self) -> f32 {
+        f32_max(0.0, self.content_size.height - self.size.height)
     }
 }
